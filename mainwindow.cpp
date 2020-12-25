@@ -4,31 +4,43 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
-    sendBuffer.resize(5);
+    ui->setupUi(this);
+
+    QPalette p(palette());
+    p.setColor(QPalette::Window, Qt::white);
+    ui->tabSettings->setAutoFillBackground(true);
+    ui->tabSettings->setPalette(p);
+
+    QPixmap pix(":/img/img/logo.png");
+    int w = ui->logo->width();
+    int h = ui->logo->height();
+    ui->logo->setPixmap(pix.scaled(w, h, Qt::KeepAspectRatio));
+
+    sendBuffer.resize(7);
     sendBuffer[0] = 0x21;
     sendBuffer[1] = 0x00;
     sendBuffer[2] = 0x00;
     sendBuffer[3] = 0x00;
-    sendBuffer[4] = 0x12;
+    sendBuffer[4] = 0x00;
+    sendBuffer[5] = 0x12;
+    sendBuffer[6] = 0x00;
     dataFromMassage[0] = 0;
     dataFromMassage[1] = 0;
     dataFromMassage[2] = 0;
+    dataFromMassage[3] = 0;
+    dataFromMassage[4] = 0;
+    dataFromMassage[5] = 0;
+    textBuffer.resize(5);
 
 
-
-    ui->setupUi(this);
-    setupControlType(controlType);
 
     serial = new QSerialPort;
     setupSerial(serial);
 
-    double rangeFlow[4] = {-1.5, 4, 1, 1000};
+    double rangeFlow[4] = {-0.5, 1.5, 1, 500};
     setupAxisRect(ui->graphFlow, rangeFlow);
 
-    double rangePressure[4] = {-1.5, 3.5, 1, 1000};
-    setupAxisRect(ui->graphPressure,  rangePressure);
-
-    double rangeVolume[4] = {-1.5, 2500, 1, 1000};
+    double rangeVolume[4] = {-1, 5, 1, 500};
     setupAxisRect(ui->graphVolume, rangeVolume);
 
     setupDataToGrafs(dataToGrafs);
@@ -37,12 +49,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(&dataTimer, SIGNAL(timeout()), this, SLOT(realtimeDataSlot()));
     connect(serial, SIGNAL(errorOccurred(QSerialPort::SerialPortError)), this, SLOT(connectionCheckSlot(QSerialPort::SerialPortError)));
     connect(&connectionTimer, SIGNAL(timeout()), this, SLOT(reconnectSerial()));
-//    qDebug()<< QString::number( serial->pinoutSignals());
 
-//    serial->errorOccurred();
-
-    dataTimer.start(50);
-
+    dataTimer.start(70);
 
 }
 
@@ -59,57 +67,30 @@ void MainWindow::serialRecieveSlot()
     message = serial->read(16);
     setDataFromMassage(&message, dataFromMassage);
 
-
 }
 
 void MainWindow::realtimeDataSlot()
 {
     setDataToGrafs(pointPosition, dataToGrafs, dataFromMassage);
-    QByteArray oneNum;
+    QString spo = "Содержание кислорода: %1 \%";
 
-    oneNum[0] = textBuffer[1];
-    int clapan1 = (int32_t)oneNum.toHex().toUInt(0, 16);
-
-    oneNum[0] = textBuffer[2];
-    int clapan2 = (int32_t)oneNum.toHex().toUInt(0, 16);
-
-    oneNum[0] = textBuffer[3];
-    int clapan3 = (int32_t)oneNum.toHex().toUInt(0, 16);
-
-    QFile file("/home/oleg/project/pyqt5/small/gui-mv-small-screen/1.txt");
-    file.open(QIODevice::ReadWrite);
-    file.readAll();
-
-    QString str = "\t%1\t%2\t%3\t%4\t%5\t%6\t%7\n";
-    QTextStream stream(&file);
-        foreach(QString s, str.arg(clapan1).arg(clapan2).arg(clapan3).arg(dataFromMassage[0]).arg(dataFromMassage[1]).arg(dataFromMassage[2]).arg(dataFromMassage[3]))
-        {
-            stream<<s;
-        }
-
+    ui->label->setText(spo.arg(dataFromMassage[2]));
+    ui->label_2->setText(spo.arg(dataFromMassage[2]));
 
     pointPosition++;
-    if (pointPosition > 990)
+    if (pointPosition > 500)
         pointPosition = 0;
 
-    ui->graphFlow->graph(0)->setData(dataToGrafs[1], dataToGrafs[0]);
+    ui->graphFlow->graph(0)->setData(dataToGrafs[1], dataToGrafs[0]);//0
     ui->graphFlow->replot();
 
-    ui->graphPressure->graph(0)->setData(dataToGrafs[3], dataToGrafs[2]);
-    ui->graphPressure->replot();
 
-    ui->graphVolume->graph(0)->setData(dataToGrafs[5], dataToGrafs[4]);
+    ui->graphVolume->graph(0)->setData(dataToGrafs[3], dataToGrafs[2]);//1
     ui->graphVolume->replot();
 
 
 }
 
-void MainWindow::setupControlType(QMap<QString, QByteArray>& controlType)
-{
-   controlType.insert("flow", "0x00");
-   controlType.insert("pressure", "0x01");
-   controlType.insert("volume", "0x02");
-}
 
 void MainWindow::setupSerial(QSerialPort* serial)
 {
@@ -128,11 +109,9 @@ void MainWindow::setupSerial(QSerialPort* serial)
         if (!serial->open(QIODevice::ReadWrite))
         {
             qDebug()<< "not op";
-            ui->labelCon->setText("не подключён  setup error");
 
         }else{
             connectionTimer.stop();
-            ui->labelCon->setText("подключён");
         }
 
 
@@ -145,7 +124,7 @@ void MainWindow::setupDataToGrafs(QVector<QVector<double>>& dataToGrafs)
 {
     dataToGrafs.resize(8);
     for(int iter = 0; iter < dataToGrafs.size(); iter++){
-        dataToGrafs[iter].resize(1050);
+        dataToGrafs[iter].resize(511);
     }
 }
 
@@ -159,6 +138,7 @@ void MainWindow::setupAxisRect(QCustomPlot* customPlot , double* range)
 
     customPlot->plotLayout()->addElement(0, 0,  axisRect);
     customPlot->addGraph(axisRect->axis(QCPAxis::atBottom),  axisRect->axis(QCPAxis::atLeft));
+    customPlot->graph(0)->setPen(QPen(QColor(66, 145, 255), 4));
 }
 
 void MainWindow::setupAxis(QCPAxisRect* axisRect, double* range)
@@ -181,13 +161,10 @@ void MainWindow::setDataFromMassage(QByteArray* message, double* dataFromMassage
         QByteArray oneNum = message->mid(iter, sizeOfOneNum);
         std::reverse(oneNum.begin(), oneNum.end());
         dataFromMassage[iter/sizeOfOneNum] = (((int32_t)oneNum.toHex().toUInt(0, 16)));
-        if(iter/sizeOfOneNum != 3){
+        if(iter/sizeOfOneNum != 2){
             dataFromMassage[iter/sizeOfOneNum] /= scaleToDouble;
         }
-
-//        qDebug() << (int32_t)oneNum.toHex().toUInt(0, 16);
     }
-//    qDebug() <<"---------";
 }
 
 void MainWindow::setDataToGrafs(int pointPosition, QVector<QVector<double>>& dataToGrafs, double* dataFromMassage)
@@ -203,37 +180,28 @@ void MainWindow::setDataToGrafs(int pointPosition, QVector<QVector<double>>& dat
 
 void MainWindow::setGapsDataToGrafs(int pointPosition, QVector<double>& dataToGrafs)
 {
-    int sizeOfGap = 30;
+    const int sizeOfGap = 10;
     for(int data = pointPosition+1; data < (pointPosition + sizeOfGap); data++)
         dataToGrafs[data] = qQNaN();
 }
 
 void MainWindow::sendSerial()
 {
-//    QByteArray senf
-//    serial->write(senf);
-    //    if (serial->waitForBytesWritten()) {
-    //    } else {
-    //        qDebug()<<"ti lox";
-    //    }
+
 }
 
 void MainWindow::on_butFlow_clicked()
 {
-    sendBuffer[0] = 0x00;
     qDebug() << "Flow";
-
 }
 
 void MainWindow::on_butPressure_clicked()
 {
-    sendBuffer[0] = 0x01;
     qDebug()<<"Pressure";
 }
 
 void MainWindow::on_butVolume_clicked()
 {
-    sendBuffer[0] = 0x02;
     qDebug()<<"Volume";
 }
 
@@ -241,60 +209,14 @@ void MainWindow::on_butApply_clicked()
 {
     serial->write(sendBuffer);
     QByteArray oneNum;
-    oneNum[0] = sendBuffer[3];
-    textBuffer = sendBuffer;
+    oneNum[0] = sendBuffer[6];
     qDebug()<< QString::number((int32_t)oneNum.toHex().toUInt(0, 16));
     qDebug()<<"apply";
 }
 
-void MainWindow::on_spinBox_valueChanged(const QString &arg1)
-{
-    sendBuffer[1] = ui->spinBox->value();
-}
-
-void MainWindow::on_spinBox_2_valueChanged(const QString &arg1)
-{
-    sendBuffer[2] = ui->spinBox_2->value();
-}
-
-void MainWindow::on_spinBox_3_valueChanged(const QString &arg1)
-{
-    sendBuffer[3] = ui->spinBox_3->value();
-}
-
-void MainWindow::on_spinBox_editingFinished()
-{
-//    sendBuffer[1] = ui->spinBox->value();
-}
-
-void MainWindow::on_spinBox_2_editingFinished()
-{
-//    sendBuffer[2] = ui->spinBox_2->value();
-}
-
-void MainWindow::on_spinBox_3_editingFinished()
-{
-//    sendBuffer[3] = ui->spinBox_3->value();
-}
-
-void MainWindow::on_dial_valueChanged(int value)
-{
-    ui->spinBox->setValue(value);
-}
-
-void MainWindow::on_dial_2_valueChanged(int value)
-{
-    ui->spinBox_2->setValue(value);
-}
-
-void MainWindow::on_dial_3_valueChanged(int value)
-{
-    ui->spinBox_3->setValue(value);
-}
 
 void MainWindow::connectionCheckSlot(QSerialPort::SerialPortError error)
 {
-    ui->labelCon->setText("не подключён slot error");
     qDebug()<<"slot error";
     connectionTimer.start(1500);
 
@@ -307,7 +229,14 @@ void MainWindow::reconnectSerial()
     serial->error();
 }
 
-void MainWindow::on_butConnect_clicked()
+void MainWindow::on_dial_valueChanged(int value)
 {
-    setupSerial(serial);
+    sendBuffer[6] = value;
+    auto v = static_cast<double>(value) /10;
+    ui->spinBox->setValue(v);
+}
+
+void MainWindow::on_spinBox_valueChanged(int arg1)
+{
+
 }
